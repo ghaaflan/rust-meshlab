@@ -1,0 +1,31 @@
+[package]
+name = "rust-meshlab"
+version = "0.1.0"
+edition = "2021"
+authors = ["ghaaflan <abadi@solid-labs.net>"]
+description = "Rust wrapper for MeshLab filters with WebAssembly support"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/ghaaflan/rust-meshlab"
+keywords = ["meshlab", "3d", "mesh", "geometry", "wasm"]
+categories = ["graphics", "wasm"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# For WASM bindings
+wasm-bindgen = { version = "0.2", optional = true }
+
+# For error handling
+thiserror = "1.0"
+
+[dev-dependencies]
+# For testing
+
+[features]
+default = []
+wasm = ["wasm-bindgen"]
+
+[profile.release]
+opt-level = 3
+lto = true
