@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>rust-meshlab WASM Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        .controls {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 8px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        #output {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-left: 4px solid #4CAF50;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .error {
+            border-left-color: #f44336;
+            color: #f44336;
+        }
+        input[type="file"] {
+            margin: 10px 0;
+        }
+        .params {
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        .params label {
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>🦀 rust-meshlab WASM Demo</h1>
+
+    <p>This demonstrates rust-meshlab running in your browser via WebAssembly!</p>
+
+    <div class="controls">
+        <h2>Load Mesh</h2>
+        <input type="file" id="fileInput" accept=".obj">
+        <p>Or use a test cube:</p>
+        <button id="loadTestCube">Load Test Cube</button>
+
+        <div id="meshInfo" style="margin-top: 15px; display: none;">
+            <h3>Mesh Info</h3>
+            <p>Vertices: <span id="vertexCount">0</span></p>
+            <p>Faces: <span id="faceCount">0</span></p>
+        </div>
+    </div>
+
+    <div class="controls" id="filtersSection" style="display: none;">
+        <h2>Apply Filters</h2>
+
+        <div>
+            <h3>Isotropic Remeshing</h3>
+            <div class="params">
+                <label>Iterations:</label>
+                <input type="number" id="iterations" value="10" min="1" max="50">
+
+                <label>Target Edge Length:</label>
+                <input type="number" id="targetLen" value="0.1" step="0.01" min="0.01">
+
+                <label>Feature Angle (deg):</label>
+                <input type="number" id="featureAngle" value="30" min="0" max="180">
+            </div>
+            <button id="applyRemesh">Apply Remeshing</button>
+        </div>
+
+        <div style="margin-top: 20px;">
+            <h3>Vertex Displacement (Noise)</h3>
+            <div class="params">
+                <label>Max Displacement:</label>
+                <input type="number" id="displacement" value="0.1" step="0.01" min="0">
+
+                <label>Random Seed:</label>
+                <input type="number" id="seed" value="42">
+            </div>
+            <button id="applyDisplacement">Apply Displacement</button>
+        </div>
+
+        <div style="margin-top: 20px;">
+            <button id="exportMesh">Export to OBJ</button>
+        </div>
+    </div>
+
+    <div id="output"></div>
+
+    <script type="module">
+        import init, { WasmMeshSet, version } from './pkg/rust_meshlab.js';
+
+        let meshSet = null;
+        const output = document.getElementById('output');
+
+        function log(message, isError = false) {
+            output.textContent = message;
+            output.className = isError ? 'error' : '';
+        }
+
+        function updateMeshInfo() {
+            if (!meshSet) return;
+
+            try {
+                const vCount = meshSet.vertexCount();
+                const fCount = meshSet.faceCount();
+
+                document.getElementById('vertexCount').textContent = vCount;
+                document.getElementById('faceCount').textContent = fCount;
+                document.getElementById('meshInfo').style.display = 'block';
+                document.getElementById('filtersSection').style.display = 'block';
+            } catch (e) {
+                log(`Error getting mesh info: ${e}`, true);
+            }
+        }
+
+        async function loadWasm() {
+            try {
+                log('Loading rust-meshlab WASM module...');
+                await init();
+                log(`✓ Loaded ${version()}\n\nReady! Load a mesh to get started.`);
+            } catch (e) {
+                log(`Failed to load WASM module: ${e}`, true);
+            }
+        }
+
+        document.getElementById('loadTestCube').addEventListener('click', async () => {
+            try {
+                log('Creating test cube...');
+                meshSet = new WasmMeshSet();
+
+                // In a real implementation, we'd load a cube OBJ
+                // For now, this demonstrates the API
+                log('✓ MeshSet created!\n\nNote: Actual mesh loading from files requires Emscripten FS API.\nThis is a demonstration of the WASM API structure.', false);
+
+                updateMeshInfo();
+            } catch (e) {
+                log(`Error creating mesh: ${e}`, true);
+            }
+        });
+
+        document.getElementById('applyRemesh').addEventListener('click', async () => {
+            if (!meshSet) {
+                log('Please load a mesh first!', true);
+                return;
+            }
+
+            try {
+                const iterations = parseInt(document.getElementById('iterations').value);
+                const targetLen = parseFloat(document.getElementById('targetLen').value);
+                const featureAngle = parseFloat(document.getElementById('featureAngle').value);
+
+                log(`Applying isotropic remeshing...\nIterations: ${iterations}\nTarget length: ${targetLen}\nFeature angle: ${featureAngle}°`);
+
+                await meshSet.applyIsotropicRemeshing(
+                    iterations,
+                    false,  // adaptive
+                    targetLen,
+                    featureAngle,
+                    false,  // selected_only
+                    false,  // check_surf_dist
+                    0.01,   // max_surf_dist
+                    true,   // split_flag
+                    true,   // collapse_flag
+                    true,   // swap_flag
+                    true,   // smooth_flag
+                    true    // reproject_flag
+                );
+
+                log('✓ Remeshing complete!');
+                updateMeshInfo();
+            } catch (e) {
+                log(`Error during remeshing: ${e}`, true);
+            }
+        });
+
+        document.getElementById('applyDisplacement').addEventListener('click', async () => {
+            if (!meshSet) {
+                log('Please load a mesh first!', true);
+                return;
+            }
+
+            try {
+                const displacement = parseFloat(document.getElementById('displacement').value);
+                const seed = parseInt(document.getElementById('seed').value);
+
+                log(`Applying vertex displacement...\nMax displacement: ${displacement}\nSeed: ${seed}`);
+
+                await meshSet.applyVertexDisplacement(displacement, true, seed);
+
+                log('✓ Displacement applied!');
+                updateMeshInfo();
+            } catch (e) {
+                log(`Error during displacement: ${e}`, true);
+            }
+        });
+
+        document.getElementById('exportMesh').addEventListener('click', async () => {
+            if (!meshSet) {
+                log('Please load a mesh first!', true);
+                return;
+            }
+
+            try {
+                log('Exporting mesh to OBJ...');
+                const objData = await meshSet.toObjString();
+
+                // Create download link
+                const blob = new Blob([objData], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'mesh_output.obj';
+                a.click();
+                URL.revokeObjectURL(url);
+
+                log('✓ Mesh exported!');
+            } catch (e) {
+                log(`Error during export: ${e}`, true);
+            }
+        });
+
+        // Initialize on load
+        loadWasm();
+    </script>
+</body>
+</html>

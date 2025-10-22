@@ -1,0 +1,7 @@
+/Users/ghaaflan/Repositories/rust-meshlab/c_wrapper/build-wasm/CMakeFiles/meshlab_api.dir
+/Users/ghaaflan/Repositories/rust-meshlab/c_wrapper/build-wasm/CMakeFiles/edit_cache.dir
+/Users/ghaaflan/Repositories/rust-meshlab/c_wrapper/build-wasm/CMakeFiles/rebuild_cache.dir
+/Users/ghaaflan/Repositories/rust-meshlab/c_wrapper/build-wasm/CMakeFiles/list_install_components.dir
+/Users/ghaaflan/Repositories/rust-meshlab/c_wrapper/build-wasm/CMakeFiles/install.dir
+/Users/ghaaflan/Repositories/rust-meshlab/c_wrapper/build-wasm/CMakeFiles/install/local.dir
+/Users/ghaaflan/Repositories/rust-meshlab/c_wrapper/build-wasm/CMakeFiles/install/strip.dir

@@ -8,6 +8,11 @@
 #include <common/ml_document/cmesh.h>
 #include <vcg/complex/algorithms/update/bounding.h>
 #include <vcg/complex/algorithms/update/normal.h>
+#include <vcg/complex/algorithms/update/topology.h>
+#include <vcg/complex/algorithms/update/flag.h>
+#include <vcg/complex/algorithms/clean.h>
+#include <vcg/complex/algorithms/isotropic_remeshing.h>
+#include <vcg/complex/append.h>
 #include <wrap/io_trimesh/import.h>
 #include <wrap/io_trimesh/export.h>
 
@@ -100,7 +105,7 @@ MeshLabResult meshset_load_mesh(MeshSetHandle* ms, const char* filename) {
         // Create new mesh
         CMeshO* mesh = new CMeshO();
 
-        // Load the file
+        // Load the file first
         int mask = 0;
         int result = vcg::tri::io::Importer<CMeshO>::Open(*mesh, filename, mask);
 
@@ -110,6 +115,21 @@ MeshLabResult meshset_load_mesh(MeshSetHandle* ms, const char* filename) {
                      vcg::tri::io::Importer<CMeshO>::ErrorMsg(result));
             return MESHLAB_ERROR_LOAD_FAILED;
         }
+
+        // Enable OCF components AFTER loading (when mesh has data)
+        mesh->face.EnableFFAdjacency();
+        mesh->face.EnableVFAdjacency();  // Faces need VF adjacency too!
+        mesh->face.EnableMark();          // Mark is needed by remeshing
+        mesh->vert.EnableVFAdjacency();
+        mesh->vert.EnableMark();          // Vertex mark too
+
+        // Compact vectors to ensure OCF data is properly allocated
+        vcg::tri::Allocator<CMeshO>::CompactVertexVector(*mesh);
+        vcg::tri::Allocator<CMeshO>::CompactFaceVector(*mesh);
+
+        // Update face-face topology (this populates FF adjacency)
+        vcg::tri::UpdateTopology<CMeshO>::FaceFace(*mesh);
+        // Note: VertexFace topology will be updated when needed by filters
 
         // Update bounding box and normals
         vcg::tri::UpdateBounding<CMeshO>::Box(*mesh);
@@ -270,6 +290,201 @@ MeshLabResult meshset_filter_vertex_displacement(
         return MESHLAB_SUCCESS;
     } catch (const std::exception& e) {
         set_error(std::string("Vertex displacement failed: ") + e.what());
+        return MESHLAB_ERROR_UNKNOWN;
+    }
+}
+
+MeshLabResult meshset_filter_isotropic_remeshing(
+    MeshSetHandle* ms,
+    int iterations,
+    bool adaptive,
+    float target_len,
+    float feature_deg,
+    bool selected_only,
+    bool check_surf_dist,
+    float max_surf_dist,
+    bool split_flag,
+    bool collapse_flag,
+    bool swap_flag,
+    bool smooth_flag,
+    bool reproject_flag)
+{
+    if (!ms) return MESHLAB_ERROR_NULL_POINTER;
+
+    CMeshO* mesh = ms->current();
+    if (!mesh) {
+        set_error("No current mesh");
+        return MESHLAB_ERROR_NO_MESH;
+    }
+
+    if (iterations <= 0) return MESHLAB_ERROR_INVALID_PARAM;
+    if (target_len <= 0) return MESHLAB_ERROR_INVALID_PARAM;
+
+    try {
+        clear_error();
+
+        // OCF components should already be enabled during mesh load
+
+        // Clean up mesh before remeshing
+        vcg::tri::Clean<CMeshO>::RemoveDuplicateVertex(*mesh);
+        vcg::tri::Clean<CMeshO>::RemoveUnreferencedVertex(*mesh);
+        vcg::tri::Allocator<CMeshO>::CompactEveryVector(*mesh);
+
+        // Clear faux edges (remeshing supports only triangles)
+        vcg::tri::UpdateFlags<CMeshO>::FaceClearF(*mesh);
+
+        // Update topology and normals
+        vcg::tri::UpdateBounding<CMeshO>::Box(*mesh);
+        vcg::tri::UpdateNormal<CMeshO>::PerVertexNormalizedPerFace(*mesh);
+
+        // Build topology structures first
+        try {
+            vcg::tri::UpdateTopology<CMeshO>::FaceFace(*mesh);
+        } catch (const std::exception& e) {
+            set_error(std::string("FaceFace topology update failed: ") + e.what());
+            return MESHLAB_ERROR_UNKNOWN;
+        }
+
+        try {
+            vcg::tri::UpdateTopology<CMeshO>::VertexFace(*mesh);
+        } catch (const std::exception& e) {
+            set_error(std::string("VertexFace topology update failed: ") + e.what());
+            return MESHLAB_ERROR_UNKNOWN;
+        }
+
+        // Set up remeshing parameters
+        vcg::tri::IsotropicRemeshing<CMeshO>::Params params;
+        params.SetTargetLen(target_len);
+        params.SetFeatureAngleDeg(feature_deg);
+        params.iter = iterations;
+        params.adapt = adaptive;
+        params.selectedOnly = selected_only;
+        params.surfDistCheck = check_surf_dist;
+        params.maxSurfDist = max_surf_dist;
+        params.splitFlag = split_flag;
+        params.collapseFlag = collapse_flag;
+        params.swapFlag = swap_flag;
+        params.smoothFlag = smooth_flag;
+        params.projectFlag = reproject_flag;
+
+        // Create a copy for the toProject parameter (required by IsotropicRemeshing)
+        // The copy is needed even if reprojection is disabled
+        CMeshO toProjectCopy = *mesh;
+
+        // Apply remeshing
+        vcg::tri::IsotropicRemeshing<CMeshO>::Do(*mesh, toProjectCopy, params);
+
+        // Update bounding box and normals after remeshing
+        vcg::tri::UpdateBounding<CMeshO>::Box(*mesh);
+        vcg::tri::UpdateNormal<CMeshO>::PerVertexNormalizedPerFace(*mesh);
+
+        return MESHLAB_SUCCESS;
+    } catch (const std::exception& e) {
+        set_error(std::string("Isotropic remeshing failed: ") + e.what());
+        return MESHLAB_ERROR_UNKNOWN;
+    }
+}
+
+MeshLabResult meshset_filter_merge_close_vertices(MeshSetHandle* ms, float threshold) {
+    if (!ms || ms->meshes.empty()) {
+        return MESHLAB_ERROR_NO_MESH;
+    }
+
+    try {
+        CMeshO* mesh = ms->meshes[ms->current_mesh_index];
+        if (!mesh) {
+            return MESHLAB_ERROR_NO_MESH;
+        }
+
+        // Call VCGlib's MergeCloseVertex function
+        int merged_count = vcg::tri::Clean<CMeshO>::MergeCloseVertex(*mesh, threshold);
+
+        // Store result in last_error for user to see how many were merged
+        std::stringstream ss;
+        ss << "Successfully merged " << merged_count << " vertices";
+        set_error(ss.str());
+
+        // Update bounding box after merging
+        vcg::tri::UpdateBounding<CMeshO>::Box(*mesh);
+
+        return MESHLAB_SUCCESS;
+    } catch (const std::exception& e) {
+        set_error(std::string("Merge close vertices failed: ") + e.what());
+        return MESHLAB_ERROR_UNKNOWN;
+    }
+}
+
+MeshLabResult meshset_filter_remove_duplicate_vertices(MeshSetHandle* ms) {
+    if (!ms || ms->meshes.empty()) {
+        return MESHLAB_ERROR_NO_MESH;
+    }
+
+    try {
+        CMeshO* mesh = ms->meshes[ms->current_mesh_index];
+        if (!mesh) {
+            return MESHLAB_ERROR_NO_MESH;
+        }
+
+        // Call VCGlib's RemoveDuplicateVertex function
+        // This removes vertices that are exactly duplicated
+        int removed_count = vcg::tri::Clean<CMeshO>::RemoveDuplicateVertex(*mesh);
+
+        // Store result in last_error for user to see how many were removed
+        std::stringstream ss;
+        ss << "Removed " << removed_count << " duplicate vertices";
+        set_error(ss.str());
+
+        // Update bounding box and normals if vertices were removed
+        if (removed_count > 0) {
+            vcg::tri::UpdateBounding<CMeshO>::Box(*mesh);
+            vcg::tri::UpdateNormal<CMeshO>::PerVertexNormalizedPerFace(*mesh);
+        }
+
+        return MESHLAB_SUCCESS;
+    } catch (const std::exception& e) {
+        set_error(std::string("Remove duplicate vertices failed: ") + e.what());
+        return MESHLAB_ERROR_UNKNOWN;
+    }
+}
+
+MeshLabResult meshset_filter_repair_non_manifold_edges(MeshSetHandle* ms, int method) {
+    if (!ms || ms->meshes.empty()) {
+        return MESHLAB_ERROR_NO_MESH;
+    }
+
+    try {
+        CMeshO* mesh = ms->meshes[ms->current_mesh_index];
+        if (!mesh) {
+            return MESHLAB_ERROR_NO_MESH;
+        }
+
+        int total = 0;
+        std::stringstream ss;
+
+        if (method == 0) {
+            // Method 0: Remove faces
+            // For each non-manifold edge, iteratively delete the smallest area face
+            // until the edge becomes 2-manifold
+            total = vcg::tri::Clean<CMeshO>::RemoveNonManifoldFace(*mesh);
+            ss << "Successfully removed " << total << " non-manifold faces";
+        } else {
+            // Method 1: Split vertices
+            // Each non-manifold edge chain will become a border
+            total = vcg::tri::Clean<CMeshO>::SplitManifoldComponents(*mesh);
+            ss << "Successfully split the mesh into " << total << " edge manifold components";
+        }
+
+        set_error(ss.str());
+
+        // Update bounding box and normals if changes were made
+        if (total > 0) {
+            vcg::tri::UpdateBounding<CMeshO>::Box(*mesh);
+            vcg::tri::UpdateNormal<CMeshO>::PerVertexNormalizedPerFace(*mesh);
+        }
+
+        return MESHLAB_SUCCESS;
+    } catch (const std::exception& e) {
+        set_error(std::string("Repair non-manifold edges failed: ") + e.what());
         return MESHLAB_ERROR_UNKNOWN;
     }
 }

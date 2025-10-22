@@ -1,7 +1,10 @@
 //! Rust bindings for MeshLab mesh processing library
 //!
 //! This library provides a safe Rust interface to MeshLab's mesh processing
-//! capabilities through a C wrapper. The API is modeled after PyMeshLab.
+//! capabilities through FFI to the C++ VCGlib. The API is modeled after PyMeshLab.
+//!
+//! On native platforms, this links to a native shared library.
+//! On WASM, this links to the Emscripten-compiled WASM version of the same C++ code.
 //!
 //! # Example
 //!
@@ -28,4 +31,11 @@ mod mesh_set;
 
 pub use error::{MeshLabError, Result};
 pub use mesh::{BoundingBox, Mesh, Point3f};
-pub use mesh_set::MeshSet;
+pub use mesh_set::{MeshSet, RepairNonManifoldMethod, TargetLength};
+
+// WASM-specific exports for JavaScript
+#[cfg(all(target_arch = "wasm32", feature = "wasm"))]
+mod wasm_bindings;
+
+#[cfg(all(target_arch = "wasm32", feature = "wasm"))]
+pub use wasm_bindings::*;

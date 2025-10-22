@@ -1,0 +1,2 @@
+/Users/ghaaflan/emsdk/upstream/emscripten/emar qc libmeshlab_api.a CMakeFiles/meshlab_api.dir/src/meshlab_api.cpp.o "CMakeFiles/meshlab_api.dir/Users/ghaaflan/Repositories/meshlab-main/src/common/ml_document/cmesh.cpp.o" "CMakeFiles/meshlab_api.dir/Users/ghaaflan/Repositories/meshlab-main/src/vcglib/wrap/ply/plylib.cpp.o"
+/Users/ghaaflan/emsdk/upstream/emscripten/emranlib libmeshlab_api.a

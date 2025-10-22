@@ -3,11 +3,22 @@ name = "rust-meshlab"
 version = "0.1.0"
 edition = "2021"
 authors = ["ghaaflan <abadi@solid-labs.net>"]
-description = "Rust wrapper for MeshLab filters with WebAssembly support"
-license = "MIT OR Apache-2.0"
+description = "Rust bindings for MeshLab mesh processing - PyMeshLab-inspired API for 3D mesh manipulation"
+license = "GPL-3.0-or-later"  # Must match MeshLab's GPL license
 repository = "https://github.com/ghaaflan/rust-meshlab"
-keywords = ["meshlab", "3d", "mesh", "geometry", "wasm"]
-categories = ["graphics", "wasm"]
+documentation = "https://docs.rs/rust-meshlab"
+homepage = "https://github.com/ghaaflan/rust-meshlab"
+readme = "README.md"
+keywords = ["meshlab", "3d", "mesh", "geometry", "processing"]
+categories = ["graphics", "rendering", "science"]
+exclude = [
+    "c_wrapper/build/",
+    "c_wrapper/build-wasm/",
+    "examples/*.obj",
+    "*.dylib",
+    "*.so",
+    "*.dll",
+]
 
 [lib]
 crate-type = ["cdylib", "rlib"]

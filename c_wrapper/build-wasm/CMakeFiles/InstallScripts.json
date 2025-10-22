@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/ghaaflan/Repositories/rust-meshlab/c_wrapper/build-wasm/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

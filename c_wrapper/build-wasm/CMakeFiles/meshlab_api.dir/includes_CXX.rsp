@@ -1,0 +1,1 @@
+-I"/Users/ghaaflan/Repositories/rust-meshlab/c_wrapper/include" -I"/Users/ghaaflan/Repositories/meshlab-main/src" -I"/Users/ghaaflan/Repositories/meshlab-main/src/vcglib" -I/opt/homebrew/opt/eigen/include/eigen3

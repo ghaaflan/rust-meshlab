@@ -71,6 +71,34 @@ extern "C" {
         random_seed: c_int,
     ) -> MeshLabResult;
 
+    pub fn meshset_filter_isotropic_remeshing(
+        ms: *mut MeshSetHandle,
+        iterations: c_int,
+        adaptive: bool,
+        target_len: c_float,
+        feature_deg: c_float,
+        selected_only: bool,
+        check_surf_dist: bool,
+        max_surf_dist: c_float,
+        split_flag: bool,
+        collapse_flag: bool,
+        swap_flag: bool,
+        smooth_flag: bool,
+        reproject_flag: bool,
+    ) -> MeshLabResult;
+
+    pub fn meshset_filter_merge_close_vertices(
+        ms: *mut MeshSetHandle,
+        threshold: c_float,
+    ) -> MeshLabResult;
+
+    pub fn meshset_filter_remove_duplicate_vertices(ms: *mut MeshSetHandle) -> MeshLabResult;
+
+    pub fn meshset_filter_repair_non_manifold_edges(
+        ms: *mut MeshSetHandle,
+        method: c_int,
+    ) -> MeshLabResult;
+
     // Error handling
     pub fn meshlab_error_string(result: MeshLabResult) -> *const c_char;
     pub fn meshlab_last_error() -> *const c_char;
