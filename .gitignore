@@ -1,0 +1,30 @@
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# C++ build
+c_wrapper/build/
+*.o
+*.so
+*.dylib
+*.dll
+
+# Output files
+*.ply
+*.obj
+*.stl
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# WASM
+pkg/
+node_modules/
